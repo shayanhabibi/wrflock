@@ -10,6 +10,7 @@
 # so we need to roll up our sleeves and use the low-level futex API.
 
 import std/atomics
+import std/posix
 export MemoryOrder
 
 type

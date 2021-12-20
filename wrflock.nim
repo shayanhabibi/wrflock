@@ -3,6 +3,7 @@ import std/times
 import wtbanland/futex
 
 import wrflock/spec
+export wWaitBlock, wWaitYield, rWaitBlock, rWaitYield, fWaitBlock, fWaitYield
 
 type
   WRFLockObj* = object
@@ -24,24 +25,24 @@ proc `[]`(lock: WRFLock, idx: int): var uint32 {.inline.} =
 # ============================================================================ #
 # Define Constructors and Destructors
 # ============================================================================ #
-proc initWRFLockObj(lock: var WRFLockObj; waitType: int; pshared: bool) =  
+proc initWRFLockObj(lock: var WRFLockObj; waitType: openArray[int]; pshared: bool) =  
   if pshared:
-    lock.data = privateMask64 or nextStateWriteMask64
+    lock.data = 0u or nextStateWriteMask64
   else:
-    lock.data = 0u
+    lock.data = privateMask64 or nextStateWriteMask64
   
-  if (waitType and wWaitYield) != 0:
+  if wWaitYield in waitType:
     lock.data = lock.data or wWaitYieldMask64
-  if (waitType and rWaitYield) != 0:
+  if rWaitYield in waitType:
     lock.data = lock.data or rWaitYieldMask64
-  if (waitType and fWaitYield) != 0:
+  if fWaitYield in waitType:
     lock.data = lock.data or fWaitYieldMask64
 
-proc initWRFLockObj(waitType: int = 0; pshared: bool = false): WRFLockObj =
+proc initWRFLockObj(waitType: openArray[int]; pshared: bool = false): WRFLockObj =
   result = WRFLockObj()
   initWRFLockObj(result, waitType, pshared)
 
-proc initWRFLock*(waitType: int = 0; pshared: bool = false): WRFLock =
+proc initWRFLock*(waitType: openArray[int] = []; pshared: bool = false): WRFLock =
   result = createShared(WRFLockObj)
   result[] = initWRFLockObj(waitType, pshared)
 
@@ -55,7 +56,7 @@ proc wAcquire*(lock: WRFLock): bool {.discardable.} =
   var newData, data: uint32
   data = lock.loadState
 
-  template lop: untyped =
+  while true:
     if (data and wrAcquireValueMask32) != 0u:
       return false # Overflow error
     newData = data or wrAcquireValueMask32
@@ -63,10 +64,8 @@ proc wAcquire*(lock: WRFLock): bool {.discardable.} =
       newData = newData or rdNxtLoopFlagMask32
     if (newData and nextStateWriteMask32) != 0u:
       newData = newData xor (nextStateWriteMask32 or currStateWriteMask32)
-  
-  lop()
-  while not lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
-    lop()
+    if lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
+      break
 
   result = true
 
@@ -81,43 +80,37 @@ proc rAcquire*(lock: WRFLock): bool {.discardable.} =
       wait(lock[stateOffset].addr, data)
     data = lock.loadState
   
-  if (data and rdAcquireCounterMask32) == rdAcquireCounterMask32:
-    return false # Overflow error
-  newData = data + (1 shl rdAcquireCounterShift32)
-
-  while not lock[countersOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
+  while true:
     if (data and rdAcquireCounterMask32) == rdAcquireCounterMask32:
       return false # Overflow error
     newData = data + (1 shl rdAcquireCounterShift32)
-  
+    if lock[countersOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
+      break
+    
   data = lock.loadState
 
-  newData = data or rdAcquireValueMask32
-  if (newData and nextStateReadFreeMask32) != 0u:
-    newData = newData xor (nextStateReadFreeMask32 or currStateReadMask32)
-  while not lock[countersOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
+  while true:
     newData = data or rdAcquireValueMask32
     if (newData and nextStateReadFreeMask32) != 0u:
       newData = newData xor (nextStateReadFreeMask32 or currStateReadMask32)
-  
+    if lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
+      break
+
   result = true
 
 proc fAcquire*(lock: WRFLock): bool {.discardable.} =
   var newData, data: uint32
   data = lock.loadState
 
-  if (data and frAcquireValueMask32) != 0u:
-    return false # Overflow error
-  newData = data or frAcquireValueMask32
-  if (newData and nextStateReadFreeMask32) != 0u:
-    newData = newData xor (nextStateReadFreeMask32 or currStateFreeMask32)
-  while not lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
+  while true:
     if (data and frAcquireValueMask32) != 0u:
       return false # Overflow error
     newData = data or frAcquireValueMask32
     if (newData and nextStateReadFreeMask32) != 0u:
       newData = newData xor (nextStateReadFreeMask32 or currStateFreeMask32)
-
+    if lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELAXED, ATOMIC_RELAXED):
+      break
+    
   result = true
 
 # ============================================================================ #
@@ -127,7 +120,7 @@ proc wRelease*(lock: WRFLock): bool {.discardable.} =
   var newData, data: uint32
   data = lock.loadState
 
-  template lop: untyped =
+  while true:
     if (data and wrAcquireValueMask32) == 0u:
       return false # Overflow error
     newData = data and not(wrAcquireValueMask32 or currStateWriteMask32 or rdNxtLoopFlagMask32)
@@ -136,11 +129,9 @@ proc wRelease*(lock: WRFLock): bool {.discardable.} =
     elif (newData and frAcquireValueMask32) != 0u:
       newData = newData or currStateFreeMask32
     else:
-      newData = nextStateReadFreeMask32
-  
-  lop()
-  while not lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
-    lop()
+      newData = newData or nextStateReadFreeMask32
+    if lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
+      break
   
   if (
     (
@@ -160,7 +151,7 @@ proc rRelease*(lock: WRFLock): bool {.discardable.} =
   var newData, data: uint
   data = lock.data.addr.atomicLoadN(ATOMIC_RELAXED)
 
-  template lop: untyped =
+  while true:
     if (data and rdAcquireCounterMask64) == 0u:
       return false # Overflow error
     newData = data - (1 shl rdAcquireCounterShift64)
@@ -170,11 +161,9 @@ proc rRelease*(lock: WRFLock): bool {.discardable.} =
         newData = newData xor (currStateReadMask64 or currStateFreeMask64)
       else:
         newData = newData xor (currStateReadMask64 or nextStateReadFreeMask64)
-  
-  lop()
-  while not lock.data.addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
-    lop()
-  
+    if lock.data.addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
+      break
+    
   if (
     ((newData and fWaitYieldMask64) == 0u) and
     ((newData and currStateFreeMask64) != 0u)
@@ -187,18 +176,16 @@ proc fRelease*(lock: WRFLock): bool {.discardable.} =
   var newData, data: uint32
   data = lock.loadState
 
-  template lop: untyped =
-    if (data and frAcquireValueMask32) != 0u:
+  while true:
+    if (data and frAcquireValueMask32) == 0u:
       return false # Overflow error
     newData = data and not(frAcquireValueMask32 or currStateFreeMask32)
     if (newData and wrAcquireValueMask32) != 0u:
       newData = newData or currStateWriteMask32
     else:
       newData = newData or nextStateWriteMask32
-  
-  lop()
-  while not lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
-    lop()
+    if lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
+      break
   
   if (
     ((newData and wWaitYieldMask32) == 0u) and
@@ -225,7 +212,7 @@ proc wTimeWait*(lock: WRFLock, time: int = 0): bool {.discardable.} =
       result = true
       break
     if (data and wWaitYieldMask32) == 0u:
-      wait(lock[stateOffset].addr, data)
+      wait(lock[stateOffset].addr, data) # TODO implement time in wait futexes
     else:
       if time > 0:
         if getTime() > (stime + dur):

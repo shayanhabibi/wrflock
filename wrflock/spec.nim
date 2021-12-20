@@ -6,7 +6,6 @@ const
   fWaitBlock* = 16
   fWaitYield* = 32
 
-
 when cpuEndian == littleEndian:
   const
     countersOffset* = 0
@@ -81,7 +80,7 @@ const
 
   nextStateWriteMask64*: uint = makeFlags(nextStateWriteMask32, true)
   nextStateReadFreeMask64*: uint = makeFlags(nextStateReadFreeMask32, true)
-  nextStateValueMask64*: uint = nextStateWriteMask64 or nextStateReadFreeMask64
+  nextStateValueMask64*: uint = nextStateWriteMask64 or nextStateReadFreeMask64 # or nextStateFreeMask64
 
   currStateWriteMask32*: uint32 = 0x00000001
   currStateReadMask32*: uint32 = 0x00000002

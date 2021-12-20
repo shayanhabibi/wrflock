@@ -35,7 +35,7 @@ proc wait*[T](monitor: ptr T, compare: T; time: static int = 0): bool {.inline, 
   when time == 0:
     result = not(sysFutex(monitor, FutexWaitPrivate, cast[cint](compare)) != 0.cint)
   else:
-    var timeout: TimeSpec
+    var timeout: posix.TimeSpec
     timeout.tv_sec = posix.Time(time div 1_000)
     timeout.tv_nsec = (time mod 1_000) * 1_000 * 1_000
     result = not(sysFutex(monitor, FutexWaitPrivate, cast[cint](compare), timeout = timeout.addr) != 0.cint)

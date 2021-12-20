@@ -30,7 +30,7 @@ proc ulock_wait(operation: uint32; address: pointer; value: uint64;
 
 proc ulock_wake(operation: uint32; address: pointer; wake_value: uint64): cint {.importc:"__ulock_wake", cdecl.}
 
-proc wait*[T](monitor: ptr T; compare: T; time: static int = 0): bool {.inline.} =
+proc wait*[T](monitor: ptr T; compare: T; time: static int = 0): bool {.inline, discardable.} =
   result = not(ulock_wait(UL_UNFAIR_LOCK64_SHARED, monitor, cast[uint64](compare), (time * 1000).uint32) != 0.cint)
 
     

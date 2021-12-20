@@ -1,6 +1,8 @@
+import std/os
+
 import wrflock
 
-let v = newWRFLock()
+let v = initWRFLock()
 echo v.facquire()
 echo v.wacquire()
 echo v.wrelease()

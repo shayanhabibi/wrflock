@@ -1,6 +1,6 @@
 import std/times
 
-import wtbanland/futex
+import wrflock/futex
 
 import wrflock/spec
 export wWaitBlock, wWaitYield, rWaitBlock, rWaitYield, fWaitBlock, fWaitYield

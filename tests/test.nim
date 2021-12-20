@@ -20,7 +20,7 @@ setLogFilter:
   else:
     lvlDebug
 
-var lock {.global.} = initWRFLock([wWaitYield, fWaitYield, rWaitYield])
+var lock {.global.} = initWRFLock()
 var counter {.global.}: Atomic[int]
 
 proc writeLock() {.thread.} =
@@ -35,13 +35,13 @@ proc readLock() {.thread.} =
   doassert lock.rAcquire()
   lock.rWait()
   doassert counter.load() == 1, "lock allowed read before it was written to"
-  echo counter.load()
   doassert lock.rRelease()
 
 proc freeLock() {.thread.} =
   sleep(500)
   doassert lock.fAcquire()
-  lock.fWait()
+  if not lock.fTimeWait(1_000):
+    return
   counter.store(-10000)
   doassert lock.fRelease()
 
@@ -58,7 +58,35 @@ template expectCounter(n: int): untyped =
 
 suite "wrflock":
   block:
-    ## See if it works
+    ## See if it works with blocking
+    
+    var threads: seq[Thread[void]]
+    newSeq(threads, threadCount)
+
+    counter.store 0
+
+    var i: int
+    for thread in threads.mitems:
+      if i == 0:
+        createThread(thread, writeLock)
+      elif i == threadCount - 1:
+        createThread(thread, freeLock)
+      else:
+        createThread(thread, readLock)
+      inc i
+    checkpoint "created $# threads" % [ $threadCount ]
+
+    for thread in threads.mitems:
+      joinThread thread
+    checkpoint "joined $# threads" % [ $threadCount ]
+
+
+    expectCounter -10000
+
+  block:
+    ## See if it works with yield
+    lock.freeWRFLock()
+    lock = initWRFLock([rWaitYield, fWaitYield, wWaitYield])
     
     var threads: seq[Thread[void]]
     newSeq(threads, threadCount)

@@ -1,4 +1,5 @@
 import std/times
+export times.`<`
 
 import wrflock/futex
 
@@ -198,11 +199,11 @@ proc fRelease*(lock: WRFLock): bool {.discardable.} =
 # ============================================================================ #
 # Define waits
 # ============================================================================ #
-proc wTimeWait*(lock: WRFLock, time: int = 0): bool {.discardable.} =
+proc wTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
   let stime = getTime()
   var data: uint32
   var dur: Duration
-  if time > 0:
+  when time > 0:
     dur = initDuration(milliseconds = time)
 
   while true:
@@ -212,19 +213,21 @@ proc wTimeWait*(lock: WRFLock, time: int = 0): bool {.discardable.} =
       result = true
       break
     if (data and wWaitYieldMask32) == 0u:
-      wait(lock[stateOffset].addr, data) # TODO implement time in wait futexes
+      if not wait(lock[stateOffset].addr, data, time):
+        result = false
+        break
     else:
-      if time > 0:
+      when time > 0:
         if getTime() > (stime + dur):
           result = false # timed out
           break
       cpuRelax()
 
-proc rTimeWait*(lock: WRFLock, time: int = 0): bool {.discardable.} =
+proc rTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
   let stime = getTime()
   var data: uint32
   var dur: Duration
-  if time > 0:
+  when time > 0:
     dur = initDuration(milliseconds = time)
   while true:
     data = lock.loadState
@@ -233,19 +236,21 @@ proc rTimeWait*(lock: WRFLock, time: int = 0): bool {.discardable.} =
       result = true
       break
     if (data and rWaitYieldMask32) == 0u:
-      wait(lock[stateOffset].addr, data)
+      if not wait(lock[stateOffset].addr, data, time):
+        result = false
+        break
     else:
-      if time > 0:
+      when time > 0:
         if getTime() > (stime + dur):
           result = false # timed out
           break
       cpuRelax()
 
-proc fTimeWait*(lock: WRFLock, time: int = 0): bool {.discardable.} =
+proc fTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
   let stime = getTime()
   var data: uint32
   var dur: Duration
-  if time > 0:
+  when time > 0:
     dur = initDuration(milliseconds = time)
   while true:
     data = lock.loadState
@@ -254,9 +259,11 @@ proc fTimeWait*(lock: WRFLock, time: int = 0): bool {.discardable.} =
       result = true
       break
     if (data and fWaitYieldMask32) == 0u:
-      wait(lock[stateOffset].addr, data)
+      if not wait(lock[stateOffset].addr, data, time):
+        result = false
+        break
     else:
-      if time > 0:
+      when time > 0:
         if getTime() > (stime + dur):
           result = false # timed out
           break
@@ -270,16 +277,19 @@ proc wTryWait*(lock: WRFLock): bool {.discardable.} =
   let data = lock.loadState(ATOMIC_ACQUIRE)
   if (data and currStateWriteMask32) == 0u:
     result = false
-  result = true
+  else:
+    result = true
 
 proc rTryWait*(lock: WRFLock): bool {.discardable.} =
   let data = lock.loadState(ATOMIC_ACQUIRE)
   if (data and currStateReadMask32) == 0u:
     result = false
-  result = true
+  else:
+    result = true
   
 proc fTryWait*(lock: WRFLock): bool {.discardable.} =
   let data = lock.loadState(ATOMIC_ACQUIRE)
   if (data and currStateFreeMask32) == 0u:
     result = false
-  result = true
+  else:
+    result = true

@@ -34,6 +34,32 @@ if lock.wAcquire(): # all operations return bools; they are discardable if you
   lock.wRelease()
 ```
 
+Alternative waits can be used.
+
+```nim
+let lock = initWRFLock()
+
+if lock.wAcquire():
+  while not lock.wTryWait():
+    # Do other things while the thread waits to perform its action
+  # Do write things here
+  lock.wRelease()
+```
+
+```nim
+let lock = initWRFLock()
+
+if lock.wAcquire():
+  while not lock.wTimeWait(1_000):
+    # Do other things if the lock times out waiting for its action
+  # Do write things here
+  lock.wRelease()
+```
+
+> **NOTE:** the behaviour of TimeWait is different between the yield and blocking
+> locks. Yield TimeWaits will always complete after the allotted time. Blocking TimeWaits can actually wait longer than the allotted time. It is guaranteed to
+> either eventually succeed or time out.
+
 By default, the Wait operations for all 3 actions (write, read, free) are blocking
 using a futex. You can pass flags to change this to just have the thread yield
 to the scheduler for any of the actions.

@@ -6,12 +6,13 @@ proc waitOnAddress[T](address: ptr T; compare: ptr T; size: int32;
 proc wakeByAddressSingle(address: pointer) {.stdcall, dynlib: "API-MS-Win-Core-Synch-l1-2-0", importc: "WakeByAddressSingle".}
 proc wakeByAddressAll(address: pointer) {.stdcall, dynlib: "API-MS-Win-Core-Synch-l1-2-0", importc: "WakeByAddressAll".}
 
-proc wait*[T](monitor: ptr T; compare: T) {.inline.} =
-  # win api says this can spuriously wake and should be in a loop which does
-  # a comparison to ensure it is appropriate for the thread to wake up
-  # while monitor[] == compare:
-    # discard waitOnAddress(monitor, compare.unsafeAddr, sizeof(T).int32, INFINITE)
-  discard waitOnAddress(monitor, compare.unsafeAddr, sizeof(T).int32, INFINITE)
+proc wait*[T](monitor: ptr T; compare: T; time: static int = 0): bool {.inline, discardable.} =
+  when time == 0:
+    const t = INFINITE
+  else:
+    const t = time
+  result = waitOnAddress(monitor, compare.unsafeAddr, sizeof(T).int32, t)
+    
 
 proc wake*(monitor: pointer) {.inline.} =
   wakeByAddressSingle(monitor)

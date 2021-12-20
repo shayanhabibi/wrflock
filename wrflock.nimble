@@ -1,4 +1,4 @@
-version = "0.1.1"
+version = "0.2.0"
 author = "Shayan Habibi"
 description = "Write, Read, Free lock primitive"
 license = "MIT"

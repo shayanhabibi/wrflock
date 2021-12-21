@@ -4,7 +4,7 @@
 
 <div align="center">
   <a href="https://github.com/nim-works/nimskull">
-    <img src="papers/assets/logo.png" height="180"/>
+    <img src="papers/assets/logo2.png" height="180"/>
   </a>
 
   <p align="center">

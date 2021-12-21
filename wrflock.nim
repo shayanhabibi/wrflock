@@ -33,6 +33,13 @@ type
   WRFLock* = ptr WRFLockObj
   WRFLockU = ptr WRFLockObjU
 
+when defined(nimdocs):
+  type AtomMemModel = distinct int
+  const
+    ATOMIC_RELAXED = 0
+    ATOMIC_RELEASE = 0
+    ATOMIC_ACQUIRE = 0
+
 # ============================================================================ #
 # Define helpers
 # ============================================================================ #

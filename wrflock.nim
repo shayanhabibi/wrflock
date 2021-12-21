@@ -1,3 +1,22 @@
+## Copyright (c) 2021 Shayan Habibi
+## Copyright (c) 2019 Mariusz Orlikowski - algorithm
+## 
+## Pure nim implementation of a specialised lock  which enforces linear operations
+## of write, reading and freeing/deallocating while allowing multiple readers,
+## and a single writer and deallocator; known as the WRFLock.
+## 
+## Principally, the WRFLock acts as a state machine. Its advantages is the use
+## of futexes or schedule yielding and a incredibly small memory footprint (8 bytes).
+## 
+## It's primary implementation purpose is for the Single Producer Multiple Producer
+## ring buffer queue proposed by the algorithm author Mariusz Orlikowski. It's use
+## is quite flexible  however and can be used in a variety of designs.
+## 
+## While the schedule yielding waits should be platform independent, the blocking
+## waits are only implemented on operating systems that have been tested for functional
+## implementations of futexes. Linux futex, darwin (macosx) ulocks and windows 
+## WaitOnAddress kernel primitives are used.
+
 import std/times
 export times.`<`
 
@@ -7,12 +26,12 @@ import wrflock/spec
 export wWaitBlock, wWaitYield, rWaitBlock, rWaitYield, fWaitBlock, fWaitYield
 
 type
-  WRFLockObj* = object
+  WRFLockObj = object
     data: uint
-  WRFLockObjU* = object
+  WRFLockObjU = object
     data: array[2, uint32]
   WRFLock* = ptr WRFLockObj
-  WRFLockU* = ptr WRFLockObjU
+  WRFLockU = ptr WRFLockObjU
 
 # ============================================================================ #
 # Define helpers
@@ -44,16 +63,32 @@ proc initWRFLockObj(waitType: openArray[int]; pshared: bool = false): WRFLockObj
   initWRFLockObj(result, waitType, pshared)
 
 proc initWRFLock*(waitType: openArray[int] = []; pshared: bool = false): WRFLock =
+  ## Initialise a WRFLock. pShared arg is nonfunctional at the moment.
+  ## 
+  ## Default operation for write, read and free waits are blocking. Pass wWaitYield,
+  ## rWaitYield and/or fWaitYield to waitType to change the operations to schedule yielding
+  ## respectively.
   result = createShared(WRFLockObj)
   result[] = initWRFLockObj(waitType, pshared)
 
 proc freeWRFLock*(lock: WRFLock) =
+  ## Deallocates a WRFLock.
   freeShared(lock)
 
 # ============================================================================ #
 # Define Acquires
 # ============================================================================ #
 proc wAcquire*(lock: WRFLock): bool {.discardable.} =
+  ## Acquires write access to the WRFLock. Will return false if there is already
+  ## a writer holding write access.
+  ## 
+  ## This is a non blocking operation and must be coupled with a successful wWait/wTimeWait/wTryWait
+  ## followed by a wRelease.
+  runnableExamples:
+    let lock = initWRFLock()
+    assert lock.wAcquire() # Success
+
+    assert not lock.wAcquire() # Fails
   var newData, data: uint32
   data = lock.loadState
 
@@ -71,6 +106,18 @@ proc wAcquire*(lock: WRFLock): bool {.discardable.} =
   result = true
 
 proc rAcquire*(lock: WRFLock): bool {.discardable.} =
+  ## Acquires read access to the WRFLock. Will return false if there are too many
+  ## readers already holding access (65535 readers).
+  ## 
+  ## This is a non blocking operation and must be coupled with a successful rWait/rTimeWait/rTryWait
+  ## followed by a rRelease.
+  runnableExamples:
+    let lock = initWRFLock()
+    assert lock.rAcquire() # Success
+    # Alternatively:
+    lock.rAcquire() # Automatically discards the result since
+                    # unlikely  the barrier of 65335 readers will
+                    # be exceeded
   var newData, data: uint32
   data = lock.loadState
 
@@ -100,6 +147,17 @@ proc rAcquire*(lock: WRFLock): bool {.discardable.} =
   result = true
 
 proc fAcquire*(lock: WRFLock): bool {.discardable.} =
+  ## Acquires free access to the WRFLock. Will return false if there is already a
+  ## free/deallocater.
+  ## 
+  ## This is a non blocking operation and must be coupled with a successful fWait/fTimeWait/fTryWait
+  ## followed by a fRelease.
+  runnableExamples:
+    let lock = initWRFLock()
+
+    assert lock.fAcquire() # Success
+
+    assert not lock.fAcquire() # Fails
   var newData, data: uint32
   data = lock.loadState
 
@@ -118,6 +176,23 @@ proc fAcquire*(lock: WRFLock): bool {.discardable.} =
 # Define releases
 # ============================================================================ #
 proc wRelease*(lock: WRFLock): bool {.discardable.} =
+  ## Releases write access to the WRFLock. Will return false if there isn't a registered
+  ## write access.
+  ## 
+  ## This is a non blocking operation and must be coupled with a prior wAcquire.
+  ## 
+  ## Success of this operation will allow readers to proceed by returning rWait
+  ## operations successfuly.
+  runnableExamples:
+    let lock = initWRFLock()
+
+    assert lock.wAcquire() # Success
+    # Do a wWait here
+    # Do writing work  here
+    assert lock.wRelease() # Success
+
+    assert not lock.wRelease() # Fails - has not acquired write access
+
   var newData, data: uint32
   data = lock.loadState
 
@@ -149,6 +224,23 @@ proc wRelease*(lock: WRFLock): bool {.discardable.} =
   result = true
 
 proc rRelease*(lock: WRFLock): bool {.discardable.} =
+  ## Releases read access to the WRFLock. Will return false if there isn't a registered
+  ## read access.
+  ## 
+  ## This is a non blocking operation and must be coupled with a prior rAcquire to
+  ## prevent overflow errors.
+  ## 
+  ## Success of this operation reduces the reader counter by 1. When all readers
+  ## release their access, the thread with 'free' access will be allowed to continue
+  ## via returning fWait operations successfully.
+  runnableExamples:
+    let lock = initWRFLock()
+
+    assert lock.rAcquire() # Success
+    # Do a rWait here
+    # Do reading work  here
+    assert lock.rRelease() # Success
+
   var newData, data: uint
   data = lock.data.addr.atomicLoadN(ATOMIC_RELAXED)
 
@@ -174,6 +266,23 @@ proc rRelease*(lock: WRFLock): bool {.discardable.} =
   result = true
 
 proc fRelease*(lock: WRFLock): bool {.discardable.} =
+  ## Releases free access to the WRFLock. Will return false if there isn't a registered
+  ## free/deallocater access.
+  ## 
+  ## This is a non blocking operation and must be coupled with a prior fAcquire.
+  ## 
+  ## Success of this operation will allow writers to proceed by returning wWait
+  ## operations successfuly.
+  runnableExamples:
+    let lock = initWRFLock()
+
+    assert lock.fAcquire() # Success
+    # Do a fWait here
+    # Do free/cleaning work  here
+    assert lock.fRelease() # Success
+
+    assert not lock.fRelease() # Fails - has not acquired free access
+
   var newData, data: uint32
   data = lock.loadState
 
@@ -200,6 +309,12 @@ proc fRelease*(lock: WRFLock): bool {.discardable.} =
 # Define waits
 # ============================================================================ #
 proc wTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
+  ## Waits for `time` in msecs (0 = infinite) for permission to execute its write
+  ## operations. Returns false if it times out or otherwise errors (depending on OS).
+  ## 
+  ## NOTE: At most the true time waited may be up to double the passed time when
+  ## blocking. This is not the same when schedule yielding.
+
   let stime = getTime()
   var data: uint32
   var dur: Duration
@@ -224,6 +339,11 @@ proc wTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
       cpuRelax()
 
 proc rTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
+  ## Waits for `time` in msecs (0 = infinite) for permission to execute its read
+  ## operations. Returns false if it times out or otherwise errors (depending on OS).
+  ## 
+  ## NOTE: At most the true time waited may be up to double the passed time when
+  ## blocking. This is not the same when schedule yielding.
   let stime = getTime()
   var data: uint32
   var dur: Duration
@@ -247,6 +367,12 @@ proc rTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
       cpuRelax()
 
 proc fTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
+  ## Waits for `time` in msecs (0 = infinite) for permission to execute its free
+  ## operations. Returns false if it times out or otherwise errors (depending on OS).
+  ## 
+  ## NOTE: At most the true time waited may be up to double the passed time when
+  ## blocking. This is not the same when schedule yielding.
+
   let stime = getTime()
   var data: uint32
   var dur: Duration
@@ -269,11 +395,18 @@ proc fTimeWait*(lock: WRFLock, time: static int = 0): bool {.discardable.} =
           break
       cpuRelax()
     
-proc wWait*(lock: WRFLock): bool {.discardable.} = wTimeWait(lock, 0)
-proc rWait*(lock: WRFLock): bool {.discardable.} = rTimeWait(lock, 0)
-proc fWait*(lock: WRFLock): bool {.discardable.} = fTimeWait(lock, 0)
+proc wWait*(lock: WRFLock): bool {.discardable.} =
+  ## Alias for wTimeWait of infinite duration
+  wTimeWait(lock, 0)
+proc rWait*(lock: WRFLock): bool {.discardable.} =
+  ## Alias  for rTimeWait of infinite duration
+  rTimeWait(lock, 0)
+proc fWait*(lock: WRFLock): bool {.discardable.} =
+  ## Alias for fTimeWait of infinite duration
+  fTimeWait(lock, 0)
 
 proc wTryWait*(lock: WRFLock): bool {.discardable.} =
+  ## Non blocking check to see if the thread can perform its write actions.
   let data = lock.loadState(ATOMIC_ACQUIRE)
   if (data and currStateWriteMask32) == 0u:
     result = false
@@ -281,6 +414,7 @@ proc wTryWait*(lock: WRFLock): bool {.discardable.} =
     result = true
 
 proc rTryWait*(lock: WRFLock): bool {.discardable.} =
+  ## Non blocking check to see if the thread can perform its read actions.
   let data = lock.loadState(ATOMIC_ACQUIRE)
   if (data and currStateReadMask32) == 0u:
     result = false
@@ -288,6 +422,7 @@ proc rTryWait*(lock: WRFLock): bool {.discardable.} =
     result = true
   
 proc fTryWait*(lock: WRFLock): bool {.discardable.} =
+  ## Non blocking check to see if the thread can perform its free/cleaning actions.
   let data = lock.loadState(ATOMIC_ACQUIRE)
   if (data and currStateFreeMask32) == 0u:
     result = false

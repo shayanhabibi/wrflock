@@ -8,6 +8,10 @@ for freeing. It is only 8 bytes large making it incredibly memory efficient.
 Using futexes makes this primitive truly faster and more efficient than mutexes for its
 use case.
 
+## Documentation
+
+[The documentation is kept up to date and is generated from the source.](https://shayanhabibi.github.io/wrflock/wrflock.html)
+
 ## Principle
 
 A thread will acquire the capability to perform an action (write, read, free)
@@ -16,6 +20,15 @@ its action, it then releases the capability which will then allow the following
 action to be completed.
 
 **Principally, the wrflock is a state machine.**
+
+## Use Cases
+
+This is especially useful in parallel IO consumption. The IO thread will attain
+the writer state and write to a shared memory location. Multiple readers can
+consume this; a specialised thread for deallocation will wait on the free action
+which is allowed when all reads have released the lock to deallocate/cleanse the
+memory (or simply allow the write to proceed) before allowing the next write to
+execute.
 
 ## Usage
 

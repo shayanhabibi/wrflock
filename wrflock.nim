@@ -33,19 +33,6 @@ type
   WRFLock* = ptr WRFLockObj
   WRFLockU = ptr WRFLockObjU
 
-when defined(nimdoc):
-  type AtomMemModel = distinct int
-  const
-    ATOMIC_RELAXED = 0.AtomMemModel
-    ATOMIC_RELEASE = 0.AtomMemModel
-    ATOMIC_ACQUIRE = 0.AtomMemModel
-
-  proc atomicLoadN[T](p: ptr T; mem: AtomMemModel): T = p[]
-  proc atomicCompareExchange[T](x: ptr T; e: ptr T; y: ptr T; we: bool; s: AtomMemModel; f: AtomMemModel): bool =
-    if x[] == e[]: x[] = y[]; return true
-    else: return false
-  proc atomicThreadFence(mem: AtomMemModel) = discard
-
 # ============================================================================ #
 # Define helpers
 # ============================================================================ #
@@ -97,11 +84,11 @@ proc wAcquire*(lock: WRFLock): bool {.discardable.} =
   ## 
   ## This is a non blocking operation and must be coupled with a successful wWait/wTimeWait/wTryWait
   ## followed by a wRelease.
-  runnableExamples:
-    let lock = initWRFLock()
-    assert lock.wAcquire() # Success
+  # runnableExamples:
+  #   let lock = initWRFLock()
+  #   assert lock.wAcquire() # Success
 
-    assert not lock.wAcquire() # Fails
+  #   assert not lock.wAcquire() # Fails
   var newData, data: uint32
   data = lock.loadState
 
@@ -124,13 +111,13 @@ proc rAcquire*(lock: WRFLock): bool {.discardable.} =
   ## 
   ## This is a non blocking operation and must be coupled with a successful rWait/rTimeWait/rTryWait
   ## followed by a rRelease.
-  runnableExamples:
-    let lock = initWRFLock()
-    assert lock.rAcquire() # Success
-    # Alternatively:
-    lock.rAcquire() # Automatically discards the result since
-                    # unlikely  the barrier of 65335 readers will
-                    # be exceeded
+  # runnableExamples:
+  #   let lock = initWRFLock()
+  #   assert lock.rAcquire() # Success
+  #   # Alternatively:
+  #   lock.rAcquire() # Automatically discards the result since
+  #                   # unlikely  the barrier of 65335 readers will
+  #                   # be exceeded
   var newData, data: uint32
   data = lock.loadState
 
@@ -165,12 +152,12 @@ proc fAcquire*(lock: WRFLock): bool {.discardable.} =
   ## 
   ## This is a non blocking operation and must be coupled with a successful fWait/fTimeWait/fTryWait
   ## followed by a fRelease.
-  runnableExamples:
-    let lock = initWRFLock()
+  # runnableExamples:
+  #   let lock = initWRFLock()
 
-    assert lock.fAcquire() # Success
+  #   assert lock.fAcquire() # Success
 
-    assert not lock.fAcquire() # Fails
+  #   assert not lock.fAcquire() # Fails
   var newData, data: uint32
   data = lock.loadState
 
@@ -196,15 +183,15 @@ proc wRelease*(lock: WRFLock): bool {.discardable.} =
   ## 
   ## Success of this operation will allow readers to proceed by returning rWait
   ## operations successfuly.
-  runnableExamples:
-    let lock = initWRFLock()
+  # runnableExamples:
+  #   let lock = initWRFLock()
 
-    assert lock.wAcquire() # Success
-    # Do a wWait here
-    # Do writing work  here
-    assert lock.wRelease() # Success
+  #   assert lock.wAcquire() # Success
+  #   # Do a wWait here
+  #   # Do writing work  here
+  #   assert lock.wRelease() # Success
 
-    assert not lock.wRelease() # Fails - has not acquired write access
+  #   assert not lock.wRelease() # Fails - has not acquired write access
 
   var newData, data: uint32
   data = lock.loadState
@@ -246,13 +233,13 @@ proc rRelease*(lock: WRFLock): bool {.discardable.} =
   ## Success of this operation reduces the reader counter by 1. When all readers
   ## release their access, the thread with 'free' access will be allowed to continue
   ## via returning fWait operations successfully.
-  runnableExamples:
-    let lock = initWRFLock()
+  # runnableExamples:
+  #   let lock = initWRFLock()
 
-    assert lock.rAcquire() # Success
-    # Do a rWait here
-    # Do reading work  here
-    assert lock.rRelease() # Success
+  #   assert lock.rAcquire() # Success
+  #   # Do a rWait here
+  #   # Do reading work  here
+  #   assert lock.rRelease() # Success
 
   var newData, data: uint
   data = lock.data.addr.atomicLoadN(ATOMIC_RELAXED)
@@ -286,15 +273,15 @@ proc fRelease*(lock: WRFLock): bool {.discardable.} =
   ## 
   ## Success of this operation will allow writers to proceed by returning wWait
   ## operations successfuly.
-  runnableExamples:
-    let lock = initWRFLock()
+  # runnableExamples:
+  #   let lock = initWRFLock()
 
-    assert lock.fAcquire() # Success
-    # Do a fWait here
-    # Do free/cleaning work  here
-    assert lock.fRelease() # Success
+  #   assert lock.fAcquire() # Success
+  #   # Do a fWait here
+  #   # Do free/cleaning work  here
+  #   assert lock.fRelease() # Success
 
-    assert not lock.fRelease() # Fails - has not acquired free access
+  #   assert not lock.fRelease() # Fails - has not acquired free access
 
   var newData, data: uint32
   data = lock.loadState

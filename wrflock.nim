@@ -33,12 +33,18 @@ type
   WRFLock* = ptr WRFLockObj
   WRFLockU = ptr WRFLockObjU
 
-when defined(nimdocs):
+when defined(nimdoc):
   type AtomMemModel = distinct int
   const
-    ATOMIC_RELAXED = 0
-    ATOMIC_RELEASE = 0
-    ATOMIC_ACQUIRE = 0
+    ATOMIC_RELAXED = 0.AtomMemModel
+    ATOMIC_RELEASE = 0.AtomMemModel
+    ATOMIC_ACQUIRE = 0.AtomMemModel
+
+  proc atomicLoadN[T](p: ptr T; mem: AtomMemModel): T = p[]
+  proc atomicCompareExchange[T](x: ptr T; e: ptr T; y: ptr T; we: bool; s: AtomMemModel; f: AtomMemModel): bool =
+    if x[] == e[]: x[] = y[]; return true
+    else: return false
+  proc atomicThreadFence(mem: AtomMemModel) = discard
 
 # ============================================================================ #
 # Define helpers

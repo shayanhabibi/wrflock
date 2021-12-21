@@ -1,4 +1,20 @@
-# WRFLock
+<div id="top"></div>
+
+<br />
+
+<div align="center">
+  <a href="https://github.com/nim-works/nimskull">
+    <img src="papers/assets/logo.png" height="180"/>
+  </a>
+
+  <p align="center">
+    Multi-threaded synchronisation state machine.
+    <br />
+    <br />
+  </p>
+</div>
+
+<br />
 
 > Pure nim implementation of the synchronisation object proposed by Mariusz Orlikowski in 'Single Producer - Multiple Consumers Ring Buffer Data Distribution System with Memory Management'
 
@@ -12,6 +28,8 @@ use case.
 
 [The documentation is kept up to date and is generated from the source.](https://shayanhabibi.github.io/wrflock/wrflock.html)
 
+<p align="right">(<a href="#top">back to top</a>)</p>
+
 ## Principle
 
 A thread will acquire the capability to perform an action (write, read, free)
@@ -19,7 +37,16 @@ and then **wait** for that action to be allowed. Once the thread has completed
 its action, it then releases the capability which will then allow the following
 action to be completed.
 
-**Principally, the wrflock is a state machine.**
+<details><summary><b>Principally, the wrflock is a state machine.</b></summary><br />
+<div align="center">
+
+![Figure 5 from Mariusz Orlikowskis paper](papers/assets/2021-12-21-14-17-31.png "Figure 5 from Mariusz Orlikowskis paper showing the WRFLock as a state machine")
+
+</div>
+</details>
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
 
 ## Use Cases
 
@@ -29,6 +56,8 @@ consume this; a specialised thread for deallocation will wait on the free action
 which is allowed when all reads have released the lock to deallocate/cleanse the
 memory (or simply allow the write to proceed) before allowing the next write to
 execute.
+
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 ## Usage
 
@@ -80,3 +109,8 @@ to the scheduler for any of the actions.
 ```nim
 let lock = initWRFLock([wWaitYield, rWaitYield, fWaitYield])
 ```
+
+Convenience templates and extra procedures such as setFlags can be found in the
+documentation.
+
+<p align="right">(<a href="#top">back to top</a>)</p>

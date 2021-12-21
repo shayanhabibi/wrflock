@@ -47,9 +47,9 @@ proc `[]`(lock: WRFLock, idx: int): var uint32 {.inline.} =
 # ============================================================================ #
 proc initWRFLockObj(lock: var WRFLockObj; waitType: openArray[int]; pshared: bool) =  
   if pshared:
-    lock.data = 0u or nextStateWriteMask64
-  else:
     lock.data = privateMask64 or nextStateWriteMask64
+  else:
+    lock.data = 0u or nextStateWriteMask64
   
   if wWaitYield in waitType:
     lock.data = lock.data or wWaitYieldMask64
@@ -428,3 +428,130 @@ proc fTryWait*(lock: WRFLock): bool {.discardable.} =
     result = false
   else:
     result = true
+
+proc setFlags*(lock: WRFLock, flags: openArray[int]): bool {.discardable.} =
+  ## EXPERIMENTAL - non blocking change of flags on a lock. Any change from
+  ## a blocking wait to a schedule yield will result in all waiters being awoken.
+  ## Operations that are blocking will return to sleep after checking their condition
+  ## while the schedule yield operations will yield after checking their condition.
+  var newData: uint32
+  var data = lock.loadState
+  var mustWake: bool
+
+  while true:
+    mustWake = false
+    newData = data
+
+    if wWaitYield in flags and (data and wWaitYieldMask32) == 0u:
+      mustWake = true
+      newData = newData or wWaitYieldMask32
+    elif wWaitBlock in flags and (data and wWaitYieldMask32) != 0u:
+      newData = newData xor wWaitYieldMask32
+
+    if rWaitYield in flags and (data and rWaitYieldMask32) == 0u:
+      mustWake = true
+      newData = newData or rWaitYieldMask32
+    elif rWaitBlock in flags and (data and rWaitYieldMask32) != 0u:
+      newData = newData xor rWaitYieldMask32
+
+    if fWaitYield in flags and (data and fWaitYieldMask32) == 0u:
+      mustWake = true
+      newData = newData or fWaitYieldMask32
+    elif fWaitBlock in flags and (data and fWaitYieldMask32) != 0u:
+      newData = newData xor fWaitYieldMask32
+    if lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
+      if mustWake:
+        wakeAll(lock[stateOffset].addr)
+      break
+    else:
+      data = lock.loadState
+  result = true
+
+type
+  CurrState* = enum
+    Uninit, Write, Read, Free
+
+proc getCurrState*(lock: WRFLock): CurrState =
+  ## For debugging purposes; checks what state the lock is currently in.
+  ## 
+  ## Returns Uninit if no valid state is found.
+  let data = lock.loadState
+  if (data and currStateReadMask32) != 0u:
+    result = CurrState.Read
+  elif (data and currStateWriteMask32) != 0u:
+    result = CurrState.Write
+  elif (data and currStateFreeMask32) != 0u:
+    result = CurrState.Free
+  else:
+    result = CurrState.Uninit
+
+template withWLock*(lock: WRFLock; body: untyped): untyped =
+  ## Convenience template; raises OverFlow error if there is already a writer.
+  ## 
+  ## Blocks until the lock allows writing
+  if not lock.wAcquire():
+    raise newException(OverflowError, "Tried to acquire write status to a WRFLock that already has a writer")
+  else:
+    lock.wWait()
+    body
+    doAssert lock.wRelease(), "Releasing write status of the WRFLock was unsuccesful"
+    
+template withRLock*(lock: WRFLock; body: untyped): untyped =
+  ## Convenience template; raises OverFlow error if there is already too many readers.
+  ## 
+  ## Blocks until the lock allows reading
+  if not lock.rAcquire():
+    raise newException(OverflowError, "Tried to acquire read status to a WRFLock that has no tokens remaining. Ensure you release reads with rRelease()")
+  else:
+    lock.rWait()
+    body
+    doAssert lock.rRelease(), "Releasing read status of the WRFLock was unsuccesful"
+
+template withFLock*(lock: WRFLock; body: untyped): untyped =
+  ## Convenience template; raises OverFlow error if there is already a free/deallocater.
+  ## 
+  ## Blocks until the lock allows free/deallocating
+  if not lock.fAcquire():
+    raise newException(OverflowError, "Tried to acquire free status to a WRFLock that already has a free/deallocator")
+  else:
+    lock.fWait()
+    body
+    doAssert lock.fRelease(), "Releasing free status of the WRFLock was unsuccesful"
+
+template whileTryingWLock*(lock: WRFLock; body: untyped; succ: untyped): untyped =
+  ## Convenience template; raises OverFlow error if there is already a writer.
+  ## 
+  ## Acquires write access, and then continuously evaluates `body` until the lock
+  ## allows writing, at which time it performs `succ` before releasing write access.
+  if not lock.wAcquire():
+    raise newException(OverflowError, "Tried to acquire write status to a WRFLock that already has a writer")
+  while not lock.wTryWait():
+    body
+  succ
+  doAssert lock.wRelease(), "Releasing write status of the WRFLock was unsuccesful"
+  
+template whileTryingRLock*(lock: WRFLock; body: untyped; succ: untyped): untyped =
+  ## Convenience template; raises OverFlow error if there is too many readers.
+  ## 
+  ## Acquires read access, and then continuously evaluates `body` until the lock
+  ## allows reading, at which time it performs `succ` before releasing read access.
+  if not lock.rAcquire():
+    raise newException(OverflowError, "Tried to acquire read status to a WRFLock that has no tokens remaining. Ensure you release reads with rRelease()")
+  while not lock.rTryWait():
+    body
+  succ
+  doAssert lock.rRelease(), "Releasing read status of the WRFLock was unsuccesful"
+  
+template whileTryingFLock*(lock: WRFLock; body: untyped; succ: untyped): untyped =
+  ## Convenience template; raises OverFlow error if there is already a free/deallocator.
+  ## 
+  ## Acquires free access, and then continuously evaluates `body` until the lock
+  ## allows freeing, at which time it performs `succ` before releasing free access.
+  if not lock.fAcquire():
+    raise newException(OverflowError, "Tried to acquire free status to a WRFLock that already has a free/deallocator")
+  while not lock.fTryWait():
+    body
+  succ
+  doAssert lock.fRelease(), "Releasing free status of the WRFLock was unsuccesful"
+  
+    

@@ -32,18 +32,15 @@ proc writeLock() {.thread.} =
     
 proc readLock() {.thread.} =
   sleep(200)
-  doassert lock.rAcquire()
-  lock.rWait()
-  try:
-    check counter.load == 1
-  except Exception:
-    checkpoint " Lock allowed read before the writer released"
-    checkpoint " counter: ", load counter
-    checkpoint "expected: ", 1
-    raise
-
-  doassert lock.rRelease()
-
+  lock.withRLock:
+    try:
+      check counter.load == 1
+    except Exception:
+      checkpoint " Lock allowed read before the writer released"
+      checkpoint " counter: ", load counter
+      checkpoint "expected: ", 1
+      raise
+    
 proc freeLock() {.thread.} =
   sleep(500)
   doassert lock.fAcquire()

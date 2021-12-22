@@ -33,7 +33,6 @@ type
   WRFLock* = ptr WRFLockObj
   WRFLockU = ptr WRFLockObjU
 
-type
   WaitType* = enum        ## Flags for setting the wait behaviour of WRFLock
     WriteBlock = wWaitBlock
     WriteYield = wWaitYield
@@ -42,7 +41,6 @@ type
     FreeBlock = fWaitBlock
     FreeYield = fWaitYield
 
-type
   WRFLockOp* = enum
     Write, Read, Free
 

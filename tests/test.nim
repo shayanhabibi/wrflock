@@ -26,13 +26,13 @@ var counter {.global.}: Atomic[int]
 proc writeLock() {.thread.} =
   sleep(1000)
   doassert lock.wAcquire()
-  lock.wWait()
+  discard lock.wWait()
   discard counter.fetchAdd(1)
   doassert lock.wRelease()
     
 proc readLock() {.thread.} =
   sleep(200)
-  lock.withRLock:
+  lock.withLock(Read):
     try:
       check counter.load == 1
     except Exception:
@@ -44,7 +44,7 @@ proc readLock() {.thread.} =
 proc freeLock() {.thread.} =
   sleep(500)
   doassert lock.fAcquire()
-  if not lock.fTimeWait(1_000):
+  if not lock.fWait(1_000):
     return
   counter.store(-10000)
   doassert lock.fRelease()

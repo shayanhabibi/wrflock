@@ -1,11 +1,12 @@
 when defined(windows):
   import pkg/waitonaddress
 
-  proc wait*[T](monitor: ptr T; compare: T; time: static int = 0): bool {.inline, discardable.} =
-    when time == 0:
-      const t = INFINITE
+  proc wait*[T](monitor: ptr T; compare: T; time: int = 0): bool {.inline, discardable.} =
+    var t: int32
+    if time == 0:
+      t = INFINITE
     else:
-      const t = time
+      t = time.int32
     result = waitOnAddress(monitor, compare.unsafeAddr, sizeof(T).int32, t)
       
 
@@ -18,13 +19,13 @@ elif defined(linux):
   import pkg/futex
   import std/posix
 
-  proc wait*[T](monitor: ptr T, compare: T; time: static int = 0): bool {.inline, discardable.} =
+  proc wait*[T](monitor: ptr T, compare: T; time: int = 0): bool {.inline, discardable.} =
     ## Suspend a thread if the value of the futex is the same as refVal.
     
     # Returns 0 in case of a successful suspend
     # If value are different, it returns EWOULDBLOCK
     # We discard as this is not needed and simplifies compat with Windows futex
-    when time == 0:
+    if time == 0:
       result = not(sysFutex(monitor, futex.WaitPrivate, cast[cint](compare)) != 0.cint)
     else:
       var timeout: posix.TimeSpec
@@ -45,8 +46,8 @@ elif defined(linux):
 elif defined(macosx):
   import pkg/ulock
   
-  proc wait*[T](monitor: ptr T; compare: T; time: static int = 0): bool {.inline, discardable.} =
-    when time == 0:
+  proc wait*[T](monitor: ptr T; compare: T; time: int = 0): bool {.inline, discardable.} =
+    if time == 0:
       ulock_wait(UL_COMPARE_AND_WAIT, monitor, cast[uint64](compare), high(uint32).uint32) >= 0
     else:
       ulock_wait(UL_COMPARE_AND_WAIT, monitor, cast[uint64](compare), (time * 1000).uint32) >= 0
@@ -58,7 +59,7 @@ elif defined(macosx):
     discard ulock_wake(UL_COMPARE_AND_WAIT or ULF_WAKE_ALL, monitor, cast[uint64](0))
 
 else:
-  proc wait*[T](monitor: ptr T; compare: T; time: static int = 0): bool {.inline, discardable.} =
+  proc wait*[T](monitor: ptr T; compare: T; time: int = 0): bool {.inline, discardable.} =
     {.fatal: "Your OS is not supported with implemented futexes, please submit an issue".}
   proc wake*(monitor: pointer) {.inline.} =
     {.fatal: "Your OS is not supported with implemented futexes, please submit an issue".}

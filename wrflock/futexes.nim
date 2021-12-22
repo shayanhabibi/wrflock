@@ -16,6 +16,7 @@ when defined(windows):
     wakeByAddressAll(monitor)
 elif defined(linux):
   import pkg/futex
+  import std/posix
 
   proc wait*[T](monitor: ptr T, compare: T; time: static int = 0): bool {.inline, discardable.} =
     ## Suspend a thread if the value of the futex is the same as refVal.

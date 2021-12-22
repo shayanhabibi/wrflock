@@ -20,7 +20,7 @@
 import std/times
 export times.`<`
 
-import wrflock/futex
+import wrflock/futexes
 
 import wrflock/spec
 export wWaitBlock, wWaitYield, rWaitBlock, rWaitYield, fWaitBlock, fWaitYield

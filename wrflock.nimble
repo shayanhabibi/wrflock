@@ -1,9 +1,9 @@
-version = "0.4.1"
+version = "0.4.2"
 author = "Shayan Habibi"
 description = "Write, Read, Free lock primitive"
 license = "MIT"
 
-requires "https://github.com/shayanhabibi/futex < 1.0.0"
+requires "https://github.com/shayanhabibi/futex >= 0.0.2 & < 1.0.0"
 requires "https://github.com/shayanhabibi/waitonaddress < 1.0.0"
 requires "https://github.com/shayanhabibi/ulock < 1.0.0"
 

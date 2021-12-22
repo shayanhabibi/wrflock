@@ -1,0 +1,3 @@
+wait	wrflock/futexes.html#wait,ptr.T,T,int	futexes: wait[T](monitor: ptr T; compare: T; time: int = 0): bool	
+wake	wrflock/futexes.html#wake,pointer	futexes: wake(monitor: pointer)	
+wakeAll	wrflock/futexes.html#wakeAll,pointer	futexes: wakeAll(monitor: pointer)	

@@ -1,0 +1,34 @@
+WRFLock	wrflock.html#WRFLock	wrflock: WRFLock	
+WriteBlock	wrflock.html#WriteBlock	WaitType.WriteBlock	
+WriteYield	wrflock.html#WriteYield	WaitType.WriteYield	
+ReadBlock	wrflock.html#ReadBlock	WaitType.ReadBlock	
+ReadYield	wrflock.html#ReadYield	WaitType.ReadYield	
+FreeBlock	wrflock.html#FreeBlock	WaitType.FreeBlock	
+FreeYield	wrflock.html#FreeYield	WaitType.FreeYield	
+WaitType	wrflock.html#WaitType	wrflock: WaitType	
+Write	wrflock.html#Write	WRFLockOp.Write	
+Read	wrflock.html#Read	WRFLockOp.Read	
+Free	wrflock.html#Free	WRFLockOp.Free	
+WRFLockOp	wrflock.html#WRFLockOp	wrflock: WRFLockOp	
+initWRFLock	wrflock.html#initWRFLock,set[WaitType],bool	wrflock: initWRFLock(waitType: set[WaitType] = {}; pshared: bool = false): WRFLock	
+freeWRFLock	wrflock.html#freeWRFLock,WRFLock	wrflock: freeWRFLock(lock: WRFLock)	
+wAcquire	wrflock.html#wAcquire,WRFLock	wrflock: wAcquire(lock: WRFLock): bool	
+rAcquire	wrflock.html#rAcquire,WRFLock	wrflock: rAcquire(lock: WRFLock): bool	
+fAcquire	wrflock.html#fAcquire,WRFLock	wrflock: fAcquire(lock: WRFLock): bool	
+acquire	wrflock.html#acquire,WRFLock,staticWRFLockOp	wrflock: acquire(lock: WRFLock; op: static WRFLockOp): bool	
+wRelease	wrflock.html#wRelease,WRFLock	wrflock: wRelease(lock: WRFLock): bool	
+rRelease	wrflock.html#rRelease,WRFLock	wrflock: rRelease(lock: WRFLock): bool	
+fRelease	wrflock.html#fRelease,WRFLock	wrflock: fRelease(lock: WRFLock): bool	
+release	wrflock.html#release,WRFLock,staticWRFLockOp	wrflock: release(lock: WRFLock; op: static WRFLockOp): bool	
+wWait	wrflock.html#wWait,WRFLock,int	wrflock: wWait(lock: WRFLock; time: int = 0): bool	
+rWait	wrflock.html#rWait,WRFLock,int	wrflock: rWait(lock: WRFLock; time: int = 0): bool	
+fWait	wrflock.html#fWait,WRFLock,int	wrflock: fWait(lock: WRFLock; time: int = 0): bool	
+wait	wrflock.html#wait,WRFLock,staticWRFLockOp,int	wrflock: wait(lock: WRFLock; op: static WRFLockOp; time: int = 0): bool	
+wTryWait	wrflock.html#wTryWait,WRFLock	wrflock: wTryWait(lock: WRFLock): bool	
+rTryWait	wrflock.html#rTryWait,WRFLock	wrflock: rTryWait(lock: WRFLock): bool	
+fTryWait	wrflock.html#fTryWait,WRFLock	wrflock: fTryWait(lock: WRFLock): bool	
+tryWait	wrflock.html#tryWait,WRFLock,staticWRFLockOp	wrflock: tryWait(lock: WRFLock; op: static WRFLockOp): bool	
+setFlags	wrflock.html#setFlags,WRFLock,set[WaitType]	wrflock: setFlags(lock: WRFLock; flags: set[WaitType])	
+getCurrState	wrflock.html#getCurrState,WRFLock	wrflock: getCurrState(lock: WRFLock): WRFLockOp	
+withLock	wrflock.html#withLock.t,WRFLock,staticWRFLockOp,untyped	wrflock: withLock(lock: WRFLock; op: static WRFLockOp; body: untyped): untyped	
+whileTryingLock	wrflock.html#whileTryingLock.t,WRFLock,staticWRFLockOp,untyped,untyped	wrflock: whileTryingLock(lock: WRFLock; op: static WRFLockOp; body: untyped;\n                succ: untyped): untyped	

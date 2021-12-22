@@ -343,15 +343,17 @@ proc release*(lock: WRFLock, op: static WRFLockOp): bool {.discardable.} =
 template waitImpl(lock: WRFLock, time: int, op: static WRFLockOp): bool =
   mixin loadState
 
-  when Write == op:
-    const currStateMask = currStateWriteMask32
-    const yieldMask = wWaitYieldMask32
-  elif Read == op:
-    const currStateMask = currStateReadMask32
-    const yieldMask = rWaitYieldMask32
-  elif Free == op:
-    const currStateMask = currStateFreeMask32
-    const yieldMask = fWaitYieldMask32
+  const currStateMask =
+    case op
+    of Write: currStateWriteMask32
+    of Read: currStateReadMask32
+    of Free: currStateFreeMask32
+  const yieldMask =
+    case op
+    of Write: wWaitYieldMask32
+    of Read: rWaitYieldMask32
+    of Free: fWaitYieldMask32
+    
   var res: bool
   let stime = getTime()
   var data: uint32
@@ -404,12 +406,11 @@ proc wait*(lock: WRFLock; op: static WRFLockOp; time: int = 0): bool =
 template tryWaitImpl(lock: WRFLock, op: static WRFLockOp): bool =
   mixin loadState
 
-  when Write == op:
-    const currStateMask = currStateWriteMask32
-  elif Read == op:
-    const currStateMask = currStateReadMask32
-  elif Free == op:
-    const currStateMask = currStateFreeMask32
+  const currStateMask =
+    case op
+    of Write: currStateWriteMask32
+    of Read: currStateReadMask32
+    of Free: currStateFreeMask32
   
   let data = lock.loadState(ATOMIC_ACQUIRE)
   if (data and currStateMask) == 0u:

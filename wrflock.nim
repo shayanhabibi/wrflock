@@ -186,9 +186,11 @@ proc fAcquire*(lock: WRFLock): bool {.discardable.} =
 proc acquire*(lock: WRFLock, op: static WRFLockOp): bool {.discardable.} =
   ## Acquires the specified access in `op` from the WRFLock.
   ## 
-  ## acquire(lock, Read) is therefore the same as rAcquire(lock)
-  ## acquire(lock, Write) is therefore the same as wAcquire(lock)
-  ## acquire(lock, Free) is therefore the same as fAcquire(lock)
+  ## `acquire(lock, Read)` is therefore the same as `rAcquire(lock)`
+  ## 
+  ## `acquire(lock, Write)` is therefore the same as `wAcquire(lock)`
+  ## 
+  ## `acquire(lock, Free)` is therefore the same as `fAcquire(lock)`
   when op == Write:
     wAcquireImpl(lock)
   elif op == Read:
@@ -327,9 +329,11 @@ proc fRelease*(lock: WRFLock): bool {.discardable.} =
 proc release*(lock: WRFLock, op: static WRFLockOp): bool {.discardable.} =
   ## Releases the specified access in `op` from the WRFLock.
   ## 
-  ## release(lock, Read) is therefore the same as rRelease(lock)
-  ## release(lock, Write) is therefore the same as wRelease(lock)
-  ## release(lock, Free) is therefore the same as fRelease(lock)
+  ## `release(lock, Read)` is therefore the same as `rRelease(lock)`
+  ## 
+  ## `release(lock, Write)` is therefore the same as `wRelease(lock)`
+  ## 
+  ## `release(lock, Free)` is therefore the same as `fRelease(lock)`
   when Write == op:
     wReleaseImpl(lock)
   elif Read == op:
@@ -353,7 +357,7 @@ template waitImpl(lock: WRFLock, time: int, op: static WRFLockOp): bool =
     of Write: wWaitYieldMask32
     of Read: rWaitYieldMask32
     of Free: fWaitYieldMask32
-    
+
   var res: bool
   let stime = getTime()
   var data: uint32

@@ -90,7 +90,7 @@ suite "wrflock":
   block:
     ## See if it works with yield
     lock.freeWRFLock()
-    lock = initWRFLock([rWaitYield, fWaitYield, wWaitYield])
+    lock = initWRFLock({WriteYield, ReadYield, FreeYield})
     
     var threads: seq[Thread[void]]
     newSeq(threads, threadCount)

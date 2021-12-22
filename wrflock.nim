@@ -33,6 +33,15 @@ type
   WRFLock* = ptr WRFLockObj
   WRFLockU = ptr WRFLockObjU
 
+type
+  WaitType* = enum        ## Flags for setting the wait behaviour of WRFLock
+    WriteBlock = wWaitBlock
+    WriteYield = wWaitYield
+    ReadBlock = rWaitBlock
+    ReadYield = rWaitYield
+    FreeBlock = fWaitBlock
+    FreeYield = fWaitYield
+
 # ============================================================================ #
 # Define helpers
 # ============================================================================ #
@@ -45,29 +54,32 @@ proc `[]`(lock: WRFLock, idx: int): var uint32 {.inline.} =
 # ============================================================================ #
 # Define Constructors and Destructors
 # ============================================================================ #
-proc initWRFLockObj(lock: var WRFLockObj; waitType: openArray[int]; pshared: bool) =  
+proc initWRFLockObj(lock: var WRFLockObj; waitType: set[WaitType]; pshared: bool) =  
   if pshared:
     lock.data = privateMask64 or nextStateWriteMask64
   else:
     lock.data = 0u or nextStateWriteMask64
   
-  if wWaitYield in waitType:
+  if WriteYield in waitType:
     lock.data = lock.data or wWaitYieldMask64
-  if rWaitYield in waitType:
+  if ReadYield in waitType:
     lock.data = lock.data or rWaitYieldMask64
-  if fWaitYield in waitType:
+  if FreeYield in waitType:
     lock.data = lock.data or fWaitYieldMask64
 
-proc initWRFLockObj(waitType: openArray[int]; pshared: bool = false): WRFLockObj =
+proc initWRFLockObj(waitType: set[WaitType]; pshared: bool = false): WRFLockObj =
   result = WRFLockObj()
   initWRFLockObj(result, waitType, pshared)
 
-proc initWRFLock*(waitType: openArray[int] = []; pshared: bool = false): WRFLock =
+proc initWRFLock*(waitType: set[WaitType] = {}; pshared: bool = false): WRFLock =
   ## Initialise a WRFLock. pShared arg is nonfunctional at the moment.
   ## 
-  ## Default operation for write, read and free waits are blocking. Pass wWaitYield,
-  ## rWaitYield and/or fWaitYield to waitType to change the operations to schedule yielding
+  ## Default operation for write, read and free waits are blocking. Pass WriteYield,
+  ## ReadYield and/or FreeYield to waitType to change the operations to schedule yielding
   ## respectively.
+  ## 
+  ## Note: Yield flags take precedence over Block flags when there are conflicting
+  ## flags in the waitType set
   result = createShared(WRFLockObj)
   result[] = initWRFLockObj(waitType, pshared)
 
@@ -429,7 +441,7 @@ proc fTryWait*(lock: WRFLock): bool {.discardable.} =
   else:
     result = true
 
-proc setFlags*(lock: WRFLock, flags: openArray[int]): bool {.discardable.} =
+proc setFlags*(lock: WRFLock, flags: set[WaitType]): bool {.discardable.} =
   ## EXPERIMENTAL - non blocking change of flags on a lock. Any change from
   ## a blocking wait to a schedule yield will result in all waiters being awoken.
   ## Operations that are blocking will return to sleep after checking their condition
@@ -442,22 +454,22 @@ proc setFlags*(lock: WRFLock, flags: openArray[int]): bool {.discardable.} =
     mustWake = false
     newData = data
 
-    if wWaitYield in flags and (data and wWaitYieldMask32) == 0u:
+    if WriteYield in flags and (data and wWaitYieldMask32) == 0u:
       mustWake = true
       newData = newData or wWaitYieldMask32
-    elif wWaitBlock in flags and (data and wWaitYieldMask32) != 0u:
+    elif WriteBlock in flags and (data and wWaitYieldMask32) != 0u:
       newData = newData xor wWaitYieldMask32
 
-    if rWaitYield in flags and (data and rWaitYieldMask32) == 0u:
+    if ReadYield in flags and (data and rWaitYieldMask32) == 0u:
       mustWake = true
       newData = newData or rWaitYieldMask32
-    elif rWaitBlock in flags and (data and rWaitYieldMask32) != 0u:
+    elif ReadBlock in flags and (data and rWaitYieldMask32) != 0u:
       newData = newData xor rWaitYieldMask32
 
-    if fWaitYield in flags and (data and fWaitYieldMask32) == 0u:
+    if FreeYield in flags and (data and fWaitYieldMask32) == 0u:
       mustWake = true
       newData = newData or fWaitYieldMask32
-    elif fWaitBlock in flags and (data and fWaitYieldMask32) != 0u:
+    elif FreeBlock in flags and (data and fWaitYieldMask32) != 0u:
       newData = newData xor fWaitYieldMask32
     if lock[stateOffset].addr.atomicCompareExchange(data.addr, newdata.addr, true, ATOMIC_RELEASE, ATOMIC_RELAXED):
       if mustWake:

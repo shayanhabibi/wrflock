@@ -107,7 +107,7 @@ using a futex. You can pass flags to change this to just have the thread yield
 to the scheduler for any of the actions.
 
 ```nim
-let lock = initWRFLock([wWaitYield, rWaitYield, fWaitYield])
+let lock = initWRFLock({WriteYield, ReadYield, FreeYield})
 ```
 
 Convenience templates and extra procedures such as setFlags can be found in the
